@@ -9,6 +9,12 @@ sharing.
 The app is built for people who want a public, social-ready summary of their
 Codex work without uploading their transcripts or leaking local context.
 
+## Project Links
+
+- Maintainer: [Anthony Di Benedetto](https://x.com/anthonydibe)
+- Repository: [AI-adb/codex-work-badge](https://github.com/AI-adb/codex-work-badge)
+- License: [MIT](LICENSE)
+
 ## Highlights
 
 - Local-only Codex usage scan.

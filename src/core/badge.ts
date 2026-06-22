@@ -2,7 +2,7 @@ import { assertPublicManifestSafe } from "./privacy.ts";
 import { renderQrUrlSvg } from "./qr.ts";
 import type { BadgeManifest, CodexAggregate, OutcomeLedgerEntry } from "./types.ts";
 
-export const DEFAULT_SHARE_URL = "https://x.com/yourprofile";
+export const DEFAULT_SHARE_URL = "https://x.com/anthonydibe";
 
 function formatNumber(value: number): string {
   return new Intl.NumberFormat("en", { notation: value >= 100000 ? "compact" : "standard" }).format(value);

@@ -9,7 +9,7 @@ it("creates a public-safe manifest with at most three chips", () => {
   expect(manifest.profileName).toBe("Mission Commander");
   expect(manifest.heroMetric.label).toBe("Verified Codex hours");
   expect(manifest.heroMetric.value).toBe("257");
-  expect(manifest.shareUrl).toBe("https://x.com/yourprofile");
+  expect(manifest.shareUrl).toBe("https://x.com/anthonydibe");
   expect(manifest.confidenceStrip).toContain("Codex Merit Card");
   expect(() => assertPublicManifestSafe(manifest)).not.toThrow();
 });
@@ -32,7 +32,7 @@ it("renders a deterministic square svg with no local paths", () => {
   expect(svg).toContain('id="crypto-hash-strip"');
   expect(svg).toContain('id="crypto-checksum-grid"');
   expect(svg).toContain('id="profile-url-qr"');
-  expect(svg).toContain('data-profile-url="https://x.com/yourprofile"');
+  expect(svg).toContain('data-profile-url="https://x.com/anthonydibe"');
   expect(svg).toContain('data-quiet-modules="4"');
   expect(svg).toContain('width="135" height="135" fill="#ffffff"');
   expect(svg).toContain("holoRainbow");

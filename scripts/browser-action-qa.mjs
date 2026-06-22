@@ -4,6 +4,7 @@ import path from "node:path";
 const targetUrl = process.env.CODEX_BADGE_URL || "http://127.0.0.1:5173";
 const cdpBase = process.env.CODEX_BADGE_CDP || "http://127.0.0.1:9222";
 const artifactDir = path.join(process.cwd(), "artifacts/codex-work-badge/browser-qa");
+const expectedDefaultShareUrl = "https://x.com/anthonydibe";
 
 class CdpClient {
   constructor(url) {
@@ -179,6 +180,10 @@ async function main() {
     await client.send("Page.navigate", { url: targetUrl });
     await waitFor(client, "document.readyState === 'complete' && !!document.querySelector('[data-testid=\"save-png\"]')", "page ready");
     await waitFor(client, "document.querySelector('[data-testid=\"export-cache\"]')?.classList.contains('ready')", "PNG export cache", 16000);
+    const initialShare = await client.evaluate(`(() => ({
+      input: document.querySelector('[data-testid="share-url-input"]')?.value || '',
+      qr: document.querySelector('[data-profile-url]')?.getAttribute('data-profile-url') || ''
+    }))()`);
 
     await client.evaluate(`(() => {
       const input = document.querySelector('[data-testid="codex-root-input"]');
@@ -305,6 +310,7 @@ async function main() {
     if (!saved4096 || saved4096.type !== "image/png" || saved4096.width !== 4096 || saved4096.height !== 4096 || saved4096.size < 1000 || !saved4096.closed) {
       failures.push(`4K save picker did not receive a complete PNG: ${JSON.stringify(saved4096)}`);
     }
+    if (initialShare.input !== expectedDefaultShareUrl || initialShare.qr !== expectedDefaultShareUrl) failures.push(`default profile URL is not rendered: ${JSON.stringify(initialShare)}`);
     if (rootInput !== "/Users/<qa>/.codex") failures.push(`Codex root input did not retain edited value: ${rootInput}`);
     if (scanResult.moduleState !== "success" || scanResult.progress !== "100%" || !scanResult.message) failures.push(`scan all-time flow failed: ${JSON.stringify(scanResult)}`);
     if (/copied/i.test(imageCopy.status) && !imageCopy.copied) failures.push(`image copy claimed success but clipboard did not contain image/png: ${JSON.stringify(imageCopy)}`);
@@ -325,6 +331,7 @@ async function main() {
       failures,
       targetUrl,
       cdpBase,
+      initialShare,
       rootInput,
       scanResult,
       saved4096,

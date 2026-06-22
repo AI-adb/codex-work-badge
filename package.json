@@ -3,6 +3,24 @@
   "version": "0.1.0",
   "private": false,
   "description": "Local-only macOS merit card generator for Codex usage stats.",
+  "author": "Anthony Di Benedetto (https://x.com/anthonydibe)",
+  "license": "MIT",
+  "homepage": "https://github.com/AI-adb/codex-work-badge#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AI-adb/codex-work-badge.git"
+  },
+  "bugs": {
+    "url": "https://github.com/AI-adb/codex-work-badge/issues"
+  },
+  "keywords": [
+    "codex",
+    "tauri",
+    "macos",
+    "privacy",
+    "badge",
+    "developer-tools"
+  ],
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
