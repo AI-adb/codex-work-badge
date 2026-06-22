@@ -1,0 +1,49 @@
+{
+  "name": "codex-work-badge",
+  "version": "0.1.0",
+  "private": false,
+  "description": "Local-only macOS merit card generator for Codex usage stats.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "vite:build": "vite build",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "doctor": "node --no-warnings --experimental-strip-types scripts/privacy-doctor.ts",
+    "test": "vitest run --config vitest.config.ts",
+    "qa": "node --no-warnings --experimental-strip-types scripts/visual-qa.ts",
+    "browser-qa": "node scripts/browser-action-qa.mjs",
+    "build": "npm run doctor && npm run test && npm run typecheck && npm run vite:build",
+    "dmg": "node scripts/codex-badge-dmg-build.mjs",
+    "user-stories": "node scripts/codex-badge-user-story-audit.mjs --run-gates",
+    "tauri:dev": "tauri dev --config src-tauri/tauri.conf.json",
+    "tauri:build": "tauri build --config src-tauri/tauri.conf.json",
+    "codex-badge:dev": "npm run dev",
+    "codex-badge:vite-build": "npm run vite:build",
+    "codex-badge:typecheck": "npm run typecheck",
+    "codex-badge:doctor": "npm run doctor",
+    "codex-badge:test": "npm run test",
+    "codex-badge:qa": "npm run qa",
+    "codex-badge:browser-qa": "npm run browser-qa",
+    "codex-badge:build": "npm run build",
+    "codex-badge:dmg": "npm run dmg"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.11.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "sharp": "^0.35.2"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.11.3",
+    "@types/node": "^22.13.4",
+    "@types/react": "^19.0.8",
+    "@types/react-dom": "^19.0.3",
+    "@vitejs/plugin-react": "^5.2.0",
+    "typescript": "^5.7.3",
+    "vite": "^7.3.5",
+    "vitest": "^3.0.5"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

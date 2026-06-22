@@ -1,0 +1,132 @@
+{
+  "id": "codex-work-badge-build-gate",
+  "name": "Codex Work Badge - local Mac app build gate",
+  "status": "ready",
+  "owner": "Anthony",
+  "description": "Local-only gate for the Codex Work Badge Mac app: aggregate parser, public badge privacy, deterministic square export, QA artifacts, and Tauri DMG path.",
+  "operatorBrief": {
+    "priority": "green",
+    "context": "New project local Mac app for generating social-ready Codex work badges from private local aggregates.",
+    "problem": "The app handles sensitive Codex logs and must not leak prompts, responses, paths, client names, secrets, or account data into public badge exports.",
+    "recommendation": "Run the local badge doctor, tests, visual QA, browser QA, user-story audit, build and DMG script before any ready claim. Keep Apple Developer ID signing/notarization separate.",
+    "nextAsk": "Use the generated local DMG for install testing; do not add hosted sharing, telemetry, signing or notarization without a separate approval gate."
+  },
+  "evidencePolicy": {
+    "freshnessDays": 7,
+    "requiredForReady": true,
+    "artifacts": [
+      "artifacts/codex-work-badge/visual-qa-summary.json",
+      "artifacts/codex-work-badge/browser-qa/browser-action-summary.json",
+      "artifacts/codex-work-badge/user-story-audit-summary.json",
+      "artifacts/codex-work-badge/codex-work-badge-qa-1080.png",
+      "artifacts/codex-work-badge/codex-work-badge-qa-4096.png",
+      "docs/qa/codex-work-badge-user-stories.csv"
+    ],
+    "logs": [
+      "artifacts/codex-work-badge/"
+    ],
+    "missingPriority": "yellow",
+    "stalePriority": "yellow"
+  },
+  "autonomy": {
+    "level": 3,
+    "description": "May run local read-only parsers, tests, doctors, visual artifact QA and local build scripts. Stops before hosted sharing, telemetry, Apple credentials, signing/notarization, deploy, publish, Shopify or global Codex mutation.",
+    "approvalRequiredFor": [
+      "Apple Developer ID signing or notarization",
+      "hosted sharing, public profile, leaderboard or social API posting",
+      "telemetry or crash reporting provider",
+      "global Codex config, hooks, automations, skills or agent changes",
+      "Shopify, Paperclip, credential, deploy, publish, payment, customer or order action"
+    ]
+  },
+  "trigger": {
+    "type": "manual",
+    "manualCommand": "npm run codex-badge:build"
+  },
+  "sourceOfTruth": {
+    "localDocs": [
+      "AGENTS.md",
+      "docs/loop-operating-standard.md",
+      "docs/visual-decision-standard.md",
+      "docs/no-cost-mcp-operating-standard.md",
+      "docs/loops/codex-work-badge-build-gate/README.md"
+    ],
+    "runtimeSources": [
+      "Selected local Codex root sqlite/state_5.sqlite",
+      "Selected local Codex root rollout JSONL files",
+      "business-outcome-ledger/entries.jsonl for manual verified outcomes"
+    ]
+  },
+  "commands": {
+    "allowlist": [
+      "npm run codex-badge:doctor",
+      "npm run codex-badge:test",
+      "npm run codex-badge:qa",
+      "npm run codex-badge:browser-qa",
+      "npm run codex-badge:user-stories",
+      "npm run codex-badge:build",
+      "npm run codex-badge:dmg"
+    ],
+    "forbiddenWithoutSameTurnApproval": [
+      "network upload, telemetry, crash reporting or analytics",
+      "hosted badge gallery, social API posting, public profile, leaderboard or QR tracking",
+      "read arbitrary home directory, browser profile, Keychain, SSH, .env or Paperclip secret folders",
+      "edit ~/.codex or global Codex configuration",
+      "Shopify CLI, Shopify Admin API, theme push, theme publish or store mutation",
+      "deploy, publish, send, payment, customer, order or credential mutation",
+      "Apple Developer ID signing or notarization"
+    ]
+  },
+  "state": {
+    "file": "docs/loops/codex-work-badge-build-gate/STATE.md",
+    "maxLines": 80
+  },
+  "verifier": {
+    "commands": [
+      "npm run codex-badge:doctor",
+      "npm run codex-badge:test",
+      "npm run codex-badge:qa",
+      "npm run codex-badge:browser-qa",
+      "npm run codex-badge:user-stories",
+      "npm run codex-badge:build",
+      "npm run codex-badge:dmg"
+    ],
+    "expectedEvidence": [
+      "privacy doctor exits 0 and reports no forbidden public data, no network APIs and no browser persistence",
+      "unit tests cover rollout counting, sqlite fixture loading, out-of-scope rollout blocking, public manifest safety and ledger redaction",
+      "visual QA produces exact 1080x1080 and 4096x4096 PNGs plus summary JSON",
+      "browser QA proves root edit, scan, custom QR URL, Save success, Copy success, blocked fallbacks and no overflow",
+      "user story audit updates docs/qa/codex-work-badge-user-stories.csv and reports pass/fix/block status for every feature",
+      "codex-badge build exits 0 and produces the Vite dist",
+      "DMG packaging is only claimed after Rust/Cargo preflight and Tauri build succeed"
+    ],
+    "failureStatus": "failed_gate",
+    "blockedStatus": "blocked"
+  },
+  "budget": {
+    "maxIterations": 2,
+    "maxRuntimeMinutes": 30,
+    "networkMode": "none",
+    "maxArtifactBytes": 8000000
+  },
+  "idempotency": {
+    "keys": [
+      "selected Codex root",
+      "badge date range",
+      "BadgeManifest public fields"
+    ]
+  },
+  "logs": [
+    "artifacts/codex-work-badge/visual-qa-summary.json"
+    ,
+    "artifacts/codex-work-badge/browser-qa/browser-action-summary.json",
+    "artifacts/codex-work-badge/user-story-audit-summary.json"
+  ],
+  "artifacts": [
+    "artifacts/codex-work-badge/codex-work-badge-qa-1080.png",
+    "artifacts/codex-work-badge/codex-work-badge-qa-4096.png",
+    "docs/qa/codex-work-badge-user-stories.csv"
+  ],
+  "rollback": "Remove apps/codex-work-badge, codex-badge scripts and this loop contract. Delete artifacts/codex-work-badge if generated.",
+  "stopCondition": "Stop on privacy leak, out-of-root read, network/telemetry evidence, failed PNG dimensions, failed Rust/Tauri/DMG preflight, or any request to publish/share/deploy without same-turn approval."
+}

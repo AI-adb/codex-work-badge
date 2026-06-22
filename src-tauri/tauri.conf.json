@@ -1,0 +1,34 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Codex Work Badge",
+  "version": "0.1.0",
+  "identifier": "ch.anthonydibenedetto.codex-work-badge",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run vite:build",
+    "devUrl": "http://127.0.0.1:5173",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Codex Work Badge",
+        "width": 1320,
+        "height": 860,
+        "minWidth": 1040,
+        "minHeight": 720
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; script-src 'self'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["dmg"],
+    "category": "DeveloperTool",
+    "macOS": {
+      "signingIdentity": "-"
+    }
+  }
+}
