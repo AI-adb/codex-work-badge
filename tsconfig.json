@@ -14,7 +14,7 @@
     "allowImportingTsExtensions": true,
     "isolatedModules": true,
     "jsx": "react-jsx",
-    "types": ["node", "vitest/globals"]
+    "types": ["node", "vite/client", "vitest/globals"]
   },
   "include": ["src", "scripts", "vite.config.ts", "vitest.config.ts"],
   "exclude": ["dist", "src-tauri/target"]

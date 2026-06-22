@@ -3,7 +3,7 @@ import type { KeyboardEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { createBadgeManifest, DEFAULT_SHARE_URL, renderBadgeSvg } from "./core/badge";
 import { findForbiddenPublicData } from "./core/privacy";
-import { sampleAggregate, sampleOutcomes } from "./core/sample";
+import { sampleAggregate, sampleOutcomes, zeroAggregate } from "./core/sample";
 import type { BadgeManifest, CodexAggregate } from "./core/types";
 
 type ScanState = "idle" | "scanning" | "success" | "partial" | "error";
@@ -254,13 +254,13 @@ export function App() {
   const [rootPath, setRootPath] = useState(defaultRoot());
   const [scanState, setScanState] = useState<ScanState>("idle");
   const [scanProgress, setScanProgress] = useState(0);
-  const [aggregate, setAggregate] = useState<CodexAggregate>(sampleAggregate);
-  const [manifest, setManifest] = useState<BadgeManifest>(() => createBadgeManifest(sampleAggregate, sampleOutcomes));
+  const [aggregate, setAggregate] = useState<CodexAggregate>(zeroAggregate);
+  const [manifest, setManifest] = useState<BadgeManifest>(() => createBadgeManifest(zeroAggregate, []));
   const [lastExport, setLastExport] = useState<LastExport>(null);
   const [shareUrl, setShareUrl] = useState(DEFAULT_SHARE_URL);
   const [exportCache, setExportCache] = useState<ExportCache>({ state: "building", files: null, message: "Preparing PNG export cache..." });
   const [actionStatus, setActionStatus] = useState<ActionStatus>({ action: "idle", state: "idle", message: "" });
-  const [message, setMessage] = useState("Preview fixture loaded. The native app scans the selected Codex root from first thread to latest.");
+  const [message, setMessage] = useState("No scan yet. Browser preview starts at zero; the Mac app scans the selected Codex root.");
   const actionRun = useRef(0);
   const svg = renderBadgeSvg(manifest, 1080);
   const preCopyImageResult = useRef<Promise<"clipboard" | "html" | "legacy-html" | "blocked"> | null>(null);
@@ -383,7 +383,7 @@ export function App() {
         setManifest(createBadgeManifest(sampleAggregate, sampleOutcomes, "private", normalizeShareUrl(shareUrl)));
         setScanProgress(100);
         setScanState("success");
-        setMessage("Browser preview scan complete with fixture data. Native Tauri scans every thread in the selected root.");
+        setMessage("Browser preview scan complete with demo fixture data. The Mac app scans every thread in the selected root.");
         return;
       }
 
@@ -583,19 +583,21 @@ export function App() {
           <div className={`export-cache ${exportCache.state}`} role={exportCache.state === "error" ? "alert" : "status"} aria-live="polite" data-testid="export-cache">
             {exportCache.message}
           </div>
-          <button type="button" onClick={savePng} disabled={isActionPending || !exportReady} data-testid="save-png">
-            {actionStatus.action === "save-png" && isActionPending ? "Preparing..." : exportReady ? "Save as PNG" : "Preparing 4K PNG"}
-          </button>
-          <button
-            type="button"
-            onPointerDown={preCopyImage}
-            onKeyDown={preCopyImageFromKeyboard}
-            onClick={copyImage}
-            disabled={isActionPending || !exportReady}
-            data-testid="copy-image"
-          >
-            {actionStatus.action === "copy-image" && isActionPending ? "Preparing..." : exportReady ? "Copy Image" : "Preparing Image Copy"}
-          </button>
+          <div className="export-actions" aria-label="Export actions">
+            <button type="button" onClick={savePng} disabled={isActionPending || !exportReady} data-testid="save-png">
+              {actionStatus.action === "save-png" && isActionPending ? "Preparing..." : exportReady ? "Save as PNG" : "Preparing 4K PNG"}
+            </button>
+            <button
+              type="button"
+              onPointerDown={preCopyImage}
+              onKeyDown={preCopyImageFromKeyboard}
+              onClick={copyImage}
+              disabled={isActionPending || !exportReady}
+              data-testid="copy-image"
+            >
+              {actionStatus.action === "copy-image" && isActionPending ? "Preparing..." : exportReady ? "Copy Image" : "Preparing Image Copy"}
+            </button>
+          </div>
           {actionStatus.message ? (
             <div className={`action-message ${actionStatus.state}`} role={actionStatus.state === "error" ? "alert" : "status"} aria-live="polite" data-testid="action-message">
               {actionStatus.message}

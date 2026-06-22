@@ -1,6 +1,29 @@
 import { createBadgeManifest } from "./badge.ts";
 import type { CodexAggregate, OutcomeLedgerEntry } from "./types.ts";
 
+export const zeroAggregate: CodexAggregate = {
+  periodLabel: "No scan yet",
+  dateRange: {
+    from: null,
+    to: null
+  },
+  sessions: 0,
+  userMessages: 0,
+  assistantMessages: 0,
+  toolCalls: 0,
+  tokens: 0,
+  activeMinutesEstimate: 0,
+  activityDays: [],
+  confidence: "empty",
+  sourceCounts: {
+    threads: 0,
+    rolloutsRead: 0,
+    missingRollouts: 0,
+    skippedOutOfScope: 0,
+    malformedLines: 0
+  }
+};
+
 export const sampleAggregate: CodexAggregate = {
   periodLabel: "2025-02-24 to 2026-06-21",
   dateRange: {

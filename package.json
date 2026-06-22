@@ -30,6 +30,7 @@
     "test": "vitest run --config vitest.config.ts",
     "qa": "node --no-warnings --experimental-strip-types scripts/visual-qa.ts",
     "browser-qa": "node scripts/browser-action-qa.mjs",
+    "prepush:validate": "npm run build && npm run qa && npm run browser-qa",
     "build": "npm run doctor && npm run test && npm run typecheck && npm run vite:build",
     "dmg": "node scripts/codex-badge-dmg-build.mjs",
     "user-stories": "node scripts/codex-badge-user-story-audit.mjs --run-gates",
@@ -42,6 +43,7 @@
     "codex-badge:test": "npm run test",
     "codex-badge:qa": "npm run qa",
     "codex-badge:browser-qa": "npm run browser-qa",
+    "codex-badge:prepush-validate": "npm run prepush:validate",
     "codex-badge:build": "npm run build",
     "codex-badge:dmg": "npm run dmg"
   },

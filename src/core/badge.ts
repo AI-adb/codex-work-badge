@@ -29,12 +29,6 @@ function formatCompactMetric(value: number): string {
     .replace("B", "bn");
 }
 
-function formatDuration(minutes: number): string {
-  if (minutes <= 0) return "0m";
-  if (minutes < 60) return `${Math.round(minutes)}m`;
-  return `${formatHours(minutes)}h`;
-}
-
 function parseIsoDate(value: string | null): number | null {
   if (!value) return null;
   const time = Date.parse(`${value}T00:00:00.000Z`);
@@ -106,14 +100,14 @@ function buildActivityIntensity(aggregate: CodexAggregate): number[] {
 function createActivityProof(aggregate: CodexAggregate): ActivityProof {
   const activityDays = aggregate.activityDays || [];
   const peakTokens = activityDays.reduce((peak, day) => Math.max(peak, day.tokens), 0);
-  const topActiveMinutes = activityDays.reduce((peak, day) => Math.max(peak, day.activeMinutesEstimate), 0);
+  const peakSessions = activityDays.reduce((peak, day) => Math.max(peak, day.sessions), 0);
   const streaks = activityStreaks(aggregate);
 
   return {
     stats: [
       { label: "Lifetime tokens", value: formatCompactMetric(aggregate.tokens) },
-      { label: "Peak day", value: formatCompactMetric(peakTokens) },
-      { label: "Top active day", value: formatDuration(topActiveMinutes) },
+      { label: "Peak tokens", value: formatCompactMetric(peakTokens) },
+      { label: "Peak sessions", value: formatCompactMetric(peakSessions) },
       { label: "Latest streak", value: `${streaks.latest}d` },
       { label: "Longest streak", value: `${streaks.longest}d` }
     ],
@@ -133,6 +127,9 @@ function chooseProfileName(aggregate: CodexAggregate, artifacts: number, gates: 
   const messages = aggregate.userMessages + aggregate.assistantMessages;
   const toolIntensity = aggregate.sessions > 0 ? aggregate.toolCalls / aggregate.sessions : 0;
 
+  if (aggregate.sessions === 0 && messages === 0 && aggregate.toolCalls === 0 && aggregate.tokens === 0 && artifacts === 0 && gates === 0) {
+    return { name: "No Scan Yet", subtitle: "Awaiting local Codex data" };
+  }
   if (artifacts >= 25 && gates >= 50) {
     return { name: "Mission Commander", subtitle: "High-output delivery profile" };
   }
@@ -180,6 +177,7 @@ export function createBadgeManifest(
   ].filter((chip): chip is { label: string; value: string } => Boolean(chip)).slice(0, 3);
 
   const confidenceStrip = `Codex Merit Card | ${aggregate.periodLabel}`;
+  const isEmpty = aggregate.sessions === 0 && aggregate.userMessages + aggregate.assistantMessages === 0 && aggregate.toolCalls === 0 && aggregate.tokens === 0;
   const manifest: BadgeManifest = {
     title: "Codex Merit Token",
     period: aggregate.periodLabel,
@@ -192,8 +190,12 @@ export function createBadgeManifest(
     confidenceStrip,
     privacyMode,
     shareUrl,
-    caption: `${profile.name}: ${heroMetric.value} ${heroMetric.label.toLowerCase()} across ${aggregate.periodLabel}. Local Codex merit card.`,
-    altText: `Square Codex Merit Token named ${profile.name}, showing ${heroMetric.value} ${heroMetric.label.toLowerCase()} for ${aggregate.periodLabel}.`
+    caption: isEmpty
+      ? "No scan yet. Local Codex merit card will update after Scan all-time."
+      : `${profile.name}: ${heroMetric.value} ${heroMetric.label.toLowerCase()} across ${aggregate.periodLabel}. Local Codex merit card.`,
+    altText: isEmpty
+      ? "Square Codex Merit Token preview with zeroed metrics before local scan."
+      : `Square Codex Merit Token named ${profile.name}, showing ${heroMetric.value} ${heroMetric.label.toLowerCase()} for ${aggregate.periodLabel}.`
   };
 
   assertPublicManifestSafe(manifest);
@@ -271,10 +273,10 @@ function renderActivityCells(intensity: number[]): string {
     const safeLevel = Math.max(0, Math.min(4, Math.round(level || 0)));
     const column = Math.floor(index / ACTIVITY_ROWS);
     const row = index % ACTIVITY_ROWS;
-    const x = column * 11;
-    const y = row * 11;
+    const x = column * 15.5;
+    const y = row * 10.5;
     const opacity = safeLevel === 0 ? "0.58" : (0.72 + safeLevel * 0.07).toFixed(2);
-    return `<rect x="${x}" y="${y}" width="7" height="7" rx="2" fill="${fills[safeLevel]}" stroke="${strokes[safeLevel]}" stroke-width="0.55" opacity="${opacity}"/>`;
+    return `<rect x="${x}" y="${y}" width="8.5" height="7.2" rx="2.2" fill="${fills[safeLevel]}" stroke="${strokes[safeLevel]}" stroke-width="0.55" opacity="${opacity}"/>`;
   }).join("");
 }
 
@@ -292,23 +294,10 @@ export function renderBadgeSvg(manifest: BadgeManifest, size = 1080): string {
     return `
       <g transform="translate(${x} 0)">
         ${index > 0 ? `<path d="M0 18V58" stroke="#d8e0df" stroke-width="1.5"/>` : ""}
-        <text x="${activityStatWidth / 2}" y="28" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="27" font-weight="760" fill="#171716">${escapeXml(stat.value)}</text>
-        <text x="${activityStatWidth / 2}" y="55" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="16" font-weight="520" fill="#6a7477">${escapeXml(stat.label)}</text>
+        <text x="${activityStatWidth / 2}" y="27" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="25" font-weight="760" fill="#171716">${escapeXml(stat.value)}</text>
+        <text x="${activityStatWidth / 2}" y="52" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="14" font-weight="540" fill="#6a7477">${escapeXml(stat.label)}</text>
       </g>`;
   }).join("");
-  const signalRows = manifest.chips.map((chip, index) => {
-    const y = index * 62;
-    const trackWidth = [198, 172, 214][index] ?? 186;
-    return `
-      <g transform="translate(0 ${y})">
-        <text x="0" y="17" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14" fill="#5f696d">${escapeXml(chip.label.toUpperCase())}</text>
-        <text x="236" y="17" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15" font-weight="760" fill="#171716">${escapeXml(chip.value)}</text>
-        <rect x="0" y="31" width="236" height="8" rx="4" fill="#e6ecec"/>
-        <rect x="0" y="31" width="${trackWidth}" height="8" rx="4" fill="#255f62"/>
-        <circle cx="${trackWidth}" cy="35" r="7" fill="#ffffff" stroke="#255f62" stroke-width="3"/>
-      </g>`;
-  }).join("");
-
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 1080 1080" role="img" aria-label="${escapeXml(manifest.altText)}">
   <defs>
     <linearGradient id="holoEdge" x1="0" x2="1" y1="0" y2="1">
@@ -381,27 +370,18 @@ export function renderBadgeSvg(manifest: BadgeManifest, size = 1080): string {
   </defs>
   <rect width="1080" height="1080" fill="#f4f6f5"/>
   <rect width="1080" height="1080" fill="url(#paper)"/>
-  <rect id="holographic-edge" x="42" y="42" width="996" height="996" rx="42" fill="url(#panel)" stroke="url(#holoEdge)" stroke-width="7"/>
-  <rect x="50" y="50" width="980" height="980" rx="36" fill="none" stroke="url(#holoEdgeInk)" stroke-width="2" opacity="0.58"/>
-  <path d="M74 72H220M860 72H1006M72 858V1006M1006 74V222" stroke="url(#holoEdge)" stroke-width="3" opacity="0.72"/>
-  <rect x="72" y="72" width="936" height="936" rx="28" fill="none" stroke="#cbd5d7" stroke-width="2"/>
-  <path d="M112 258H968M112 760H968M112 930H968" stroke="#ccd6d8" stroke-width="2"/>
-  <path d="M112 138H404M746 138H968" stroke="#255f62" stroke-width="3"/>
-  <text x="112" y="166" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18" fill="#315f5c">${escapeXml(manifest.title)}</text>
-  <text x="112" y="225" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="58" font-weight="880" fill="#171716">${escapeXml(manifest.profileName)}</text>
-  <text x="112" y="312" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="30" font-weight="720" fill="#242B33">${escapeXml(manifest.profileSubtitle)}</text>
-  <text x="112" y="400" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="21" fill="#5f696d">${escapeXml(manifest.heroMetric.label)}</text>
-  <text x="108" y="574" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="166" font-weight="920" fill="#171716">${escapeXml(manifest.heroMetric.value)}</text>
-  <text x="420" y="558" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="48" font-weight="780" fill="#5f696d">${metricUnit}</text>
-  <path d="M112 618H558" stroke="#255f62" stroke-width="6"/>
-  <text x="112" y="682" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="42" font-weight="760" fill="#171716">All-time Codex run</text>
-  <text x="112" y="726" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="24" fill="#315f5c">${escapeXml(manifest.period)}</text>
-  <g id="signal-stack" transform="translate(700 406)">
-    <text x="0" y="-30" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15" fill="#315f5c">SIGNAL STACK</text>
-    <path d="M0 -12H236" stroke="#ccd6d8" stroke-width="2"/>
-    ${signalRows}
-  </g>
-  <g id="security-glyph" transform="translate(622 558)">
+  <rect id="holographic-edge" x="42" y="42" width="996" height="996" rx="42" fill="url(#panel)" stroke="url(#holoEdge)" stroke-width="4" stroke-opacity="0.54"/>
+  <path d="M112 318H968M112 634H968M112 932H968" stroke="#ccd6d8" stroke-width="2"/>
+  <text x="112" y="142" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18" fill="#315f5c">${escapeXml(manifest.title)}</text>
+  <text x="112" y="202" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="58" font-weight="880" fill="#171716">${escapeXml(manifest.profileName)}</text>
+  <text x="112" y="292" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="30" font-weight="720" fill="#242B33">${escapeXml(manifest.profileSubtitle)}</text>
+  <text x="112" y="382" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="21" fill="#5f696d">${escapeXml(manifest.heroMetric.label)}</text>
+  <text x="108" y="556" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="166" font-weight="920" fill="#171716">${escapeXml(manifest.heroMetric.value)}</text>
+  <text x="420" y="540" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="48" font-weight="780" fill="#5f696d">${metricUnit}</text>
+  <path d="M112 596H558" stroke="#255f62" stroke-width="6"/>
+  <text x="112" y="684" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="42" font-weight="760" fill="#171716">All-time Codex run</text>
+  <text x="112" y="724" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="24" fill="#315f5c">${escapeXml(manifest.period)}</text>
+  <g id="security-glyph" transform="translate(622 370)">
     <g id="holographic-label" clip-path="url(#holoLabelClip)">
       <path id="crypto-frame" d="M0 20L20 0H326L346 20V174L326 194H20L0 174Z" fill="url(#holoSilver)" stroke="#8fa2a6" stroke-width="1.6"/>
       <rect width="346" height="194" fill="url(#holoLattice)" opacity="0.72"/>
@@ -421,36 +401,29 @@ export function renderBadgeSvg(manifest: BadgeManifest, size = 1080): string {
     <path d="M0 20L20 0H326L346 20V174L326 194H20L0 174Z" fill="none" stroke="#ffffff" stroke-width="1.1" opacity="0.76"/>
     <path d="M0 20L20 0H326L346 20V174L326 194H20L0 174Z" fill="none" stroke="#1f4d63" stroke-width="1.4" opacity="0.34"/>
     <g id="crypto-checksum-grid" transform="translate(194 20)">
-      <rect x="-10" y="-10" width="155" height="155" rx="10" fill="#f8fbfa" opacity="0.96"/>
-      <rect x="-10" y="-10" width="155" height="155" rx="10" fill="url(#cryptoMicrogrid)" opacity="0.32"/>
+      <rect x="-10" y="-10" width="155" height="174" rx="10" fill="#f8fbfa" opacity="0.96"/>
+      <rect x="-10" y="-10" width="155" height="174" rx="10" fill="url(#cryptoMicrogrid)" opacity="0.32"/>
       ${profileQr}
-      <path d="M-10 160H145" stroke="#1f4d63" stroke-width="1" opacity="0.38"/>
-      <text x="67.5" y="177" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="760" fill="#1f4d63" opacity="0.74">PROFILE URL</text>
+      <path d="M-4 144H139" stroke="#1f4d63" stroke-width="1" opacity="0.3"/>
+      <text x="67.5" y="160" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" font-weight="760" fill="#1f4d63" opacity="0.74">PROFILE URL</text>
     </g>
     <g id="crypto-hash-strip" transform="translate(20 172)">
       <text x="0" y="0" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" font-weight="760" fill="#111418" opacity="0.62">MERIT ${digestLabel}</text>
     </g>
     <path d="M20 0V194M326 0V194" stroke="#ffffff" stroke-width="1" opacity="0.45"/>
   </g>
-  <g id="activity-rail" transform="translate(112 770)">
-    <rect width="856" height="154" rx="18" fill="#ffffff" stroke="#ccd6d8" stroke-width="2"/>
-    <rect x="1" y="1" width="854" height="152" rx="17" fill="url(#paper)" opacity="0.34"/>
+  <g id="activity-rail" transform="translate(112 750)">
+    <rect width="856" height="198" rx="18" fill="#ffffff" stroke="#ccd6d8" stroke-width="2"/>
+    <rect x="1" y="1" width="854" height="196" rx="17" fill="url(#paper)" opacity="0.26"/>
     <g id="activity-stat-ribbon" transform="translate(0 18)">
       ${activityStats}
     </g>
-    <path d="M24 78H832" stroke="#ccd6d8" stroke-width="1.5"/>
-    <text x="24" y="106" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="22" font-weight="720" fill="#171716">Codex activity</text>
-    <text x="24" y="130" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14" fill="#5f696d">PUBLIC-SAFE DAILY SIGNAL</text>
-    <text x="266" y="106" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14" fill="#315f5c">DAILY</text>
-    <text x="324" y="106" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14" fill="#8a9496">WEEKLY</text>
-    <text x="398" y="106" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14" fill="#8a9496">CUMULATIVE</text>
-    <g id="activity-lattice" transform="translate(282 88)">
-      <rect x="-12" y="-12" width="574" height="75" rx="12" fill="#f7faf9" stroke="#e1e7e6" stroke-width="1"/>
+    <path d="M24 74H832" stroke="#ccd6d8" stroke-width="1.5"/>
+    <text x="24" y="102" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="22" font-weight="720" fill="#171716">Codex activity</text>
+    <text x="24" y="124" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" fill="#5f696d">PUBLIC-SAFE DAILY SIGNAL</text>
+    <g id="activity-lattice" transform="translate(24 144)">
+      <rect x="-10" y="-7" width="812" height="55" rx="12" fill="#f7faf9" stroke="#e1e7e6" stroke-width="1"/>
       ${activityCells}
-      <path d="M-12 61H562" stroke="url(#holoEdge)" stroke-width="2" opacity="0.34"/>
-      <text x="0" y="66" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10" fill="#6a7477">EARLY</text>
-      <text x="270" y="66" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10" fill="#6a7477">MID</text>
-      <text x="546" y="66" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10" fill="#315f5c">RECENT</text>
     </g>
   </g>
   <text x="112" y="968" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="17" fill="#5f696d">${escapeXml(manifest.confidenceStrip)}</text>

@@ -115,9 +115,9 @@ input {
 
 .workbench {
   display: grid;
-  grid-template-columns: minmax(250px, 310px) minmax(520px, 1fr) minmax(250px, 310px);
-  gap: 16px;
-  align-items: stretch;
+  grid-template-columns: minmax(248px, 300px) minmax(540px, 1fr) minmax(280px, 324px);
+  gap: 14px;
+  align-items: start;
   padding: 16px 0;
 }
 
@@ -129,11 +129,14 @@ input {
 }
 
 .control-panel {
+  display: grid;
+  align-content: start;
+  gap: 12px;
   padding: 16px;
 }
 
 .control-panel p {
-  margin: 14px 0 16px;
+  margin: 0;
   color: var(--text-soft);
   font-size: 13px;
   line-height: 1.48;
@@ -143,7 +146,7 @@ input {
 .control-panel label {
   display: grid;
   gap: 7px;
-  margin: 12px 0;
+  margin: 0;
   color: var(--text-soft);
   font-family: "SF Mono", ui-monospace, Menlo, monospace;
   font-size: 12px;
@@ -166,7 +169,7 @@ input {
 
 .control-panel button {
   width: 100%;
-  margin-top: 10px;
+  margin-top: 0;
   border: 1px solid rgba(23, 23, 22, 0.14);
   border-radius: 6px;
   background: #171716;
@@ -212,7 +215,6 @@ input {
 }
 
 .scan-module {
-  margin-top: 14px;
   border: 1px solid rgba(31, 45, 50, 0.12);
   border-radius: 8px;
   background: #f7f9f8;
@@ -268,16 +270,20 @@ input {
 
 .signal-list {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
-  margin-top: 14px;
+  margin-top: 2px;
 }
 
 .signal-list div {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  border-top: 1px solid rgba(150, 179, 171, 0.14);
-  padding-top: 9px;
+  display: grid;
+  min-height: 62px;
+  align-content: center;
+  gap: 4px;
+  border: 1px solid rgba(31, 45, 50, 0.11);
+  border-radius: 8px;
+  background: rgba(247, 249, 248, 0.72);
+  padding: 9px 10px;
 }
 
 .signal-list span {
@@ -288,14 +294,15 @@ input {
 .signal-list strong {
   color: var(--mint);
   font-family: "SF Mono", ui-monospace, Menlo, monospace;
-  font-size: 18px;
+  font-size: 19px;
   font-variant-numeric: tabular-nums;
 }
 
 .badge-stage {
   display: grid;
   min-width: 0;
-  grid-template-rows: auto minmax(420px, 1fr) auto;
+  grid-template-rows: auto auto auto;
+  gap: 12px;
   padding: 14px;
   background:
     radial-gradient(circle at 72% 22%, rgba(37, 95, 98, 0.07), transparent 18rem),
@@ -312,10 +319,10 @@ input {
 
 .token-frame {
   position: relative;
-  width: min(68vh, 100%);
+  width: min(100%, clamp(500px, 70vh, 720px));
   aspect-ratio: 1 / 1;
-  max-width: 700px;
-  min-width: 430px;
+  max-width: 720px;
+  min-width: 0;
   align-self: center;
   justify-self: center;
   filter: drop-shadow(0 22px 34px rgba(36, 29, 18, 0.18));
@@ -339,10 +346,6 @@ input {
 
 .stage-footer {
   color: var(--text-soft);
-}
-
-.export-panel button:nth-of-type(2) {
-  border-color: rgba(37, 95, 98, 0.44);
 }
 
 .share-url-field {
@@ -384,21 +387,35 @@ input {
 
 .detail-list {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
-  margin: 12px 0;
+  margin: 0;
 }
 
 .detail-list span {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  border-top: 1px solid #e0e6eb;
-  padding-top: 8px;
+  display: grid;
+  gap: 4px;
+  min-height: 58px;
+  border: 1px solid #e0e6eb;
+  border-radius: 8px;
+  background: #fbfcfc;
+  padding: 9px 10px;
+  line-height: 1.24;
 }
 
 .detail-list strong {
   color: #171716;
   font-variant-numeric: tabular-nums;
+}
+
+.export-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.export-actions button:last-child {
+  border-color: rgba(37, 95, 98, 0.44);
 }
 
 .export-ready {
@@ -426,7 +443,6 @@ input {
 }
 
 .export-cache {
-  margin-top: 12px;
   border-radius: 8px;
   padding: 9px 10px;
   color: #315f5c;
@@ -447,7 +463,6 @@ input {
 }
 
 .action-message {
-  margin-top: 10px;
   border-radius: 8px;
   padding: 10px 11px;
   color: #4a4338;
@@ -476,11 +491,12 @@ input {
 .export-result {
   display: grid;
   gap: 10px;
-  margin-top: 10px;
 }
 
 .export-result img {
   width: 100%;
+  max-height: 220px;
+  object-fit: contain;
   border-radius: 8px;
   outline: 1px solid rgba(0, 0, 0, 0.1);
   outline-offset: -1px;
@@ -514,6 +530,7 @@ input {
 .proof-panel {
   justify-content: flex-start;
   flex-wrap: wrap;
+  row-gap: 8px;
   color: var(--text-soft);
   font-family: "SF Mono", ui-monospace, Menlo, monospace;
   font-size: 12px;
@@ -539,7 +556,7 @@ input {
   }
 }
 
-@media (max-width: 1100px) {
+@media (max-width: 1180px) {
   body {
     min-width: 0;
   }
@@ -565,7 +582,7 @@ input {
   }
 
   .badge-stage {
-    grid-template-rows: auto minmax(300px, 1fr) auto;
+    grid-template-rows: auto auto auto;
     padding: 10px;
   }
 
@@ -580,12 +597,14 @@ input {
 
   .control-panel input,
   .export-links,
+  .export-actions,
   .proof-panel span,
   .strip-signals span {
     overflow-wrap: anywhere;
   }
 
-  .export-links {
+  .export-links,
+  .export-actions {
     grid-template-columns: 1fr;
   }
 }

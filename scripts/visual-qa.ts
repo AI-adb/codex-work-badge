@@ -29,6 +29,12 @@ const png4096 = await renderAndCheck(4096);
 const svgA = renderBadgeSvg(sampleBadgeManifest, 1080);
 const svgB = renderBadgeSvg(sampleBadgeManifest, 1080);
 if (svgA !== svgB) failures.push("Badge renderer is not deterministic for identical input.");
+if (svgA.includes("Top active day")) failures.push("Ambiguous Top active day metric is still rendered.");
+if (svgA.includes("M74 72H220")) failures.push("Deprecated corner accent rules are still rendered.");
+if (svgA.includes("M112 138H404M746 138H968")) failures.push("Deprecated top decorative rules are still rendered.");
+if (svgA.includes('y="177" text-anchor="middle"')) failures.push("Profile URL label is still positioned outside the QR block.");
+if (svgA.includes(">WEEKLY</text>") || svgA.includes(">CUMULATIVE</text>")) failures.push("Activity mode micro-labels are still rendered in the compact rail.");
+if (svgA.includes(">EARLY</text>") || svgA.includes(">MID</text>") || svgA.includes(">RECENT</text>")) failures.push("Activity axis micro-labels are still rendered in the compact rail.");
 
 const summary = {
   ok: failures.length === 0,

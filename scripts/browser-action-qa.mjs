@@ -2,9 +2,17 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 const targetUrl = process.env.CODEX_BADGE_URL || "http://127.0.0.1:5173";
-const cdpBase = process.env.CODEX_BADGE_CDP || "http://127.0.0.1:9222";
+let cdpBase = process.env.CODEX_BADGE_CDP || "http://127.0.0.1:9222";
 const artifactDir = path.join(process.cwd(), "artifacts/codex-work-badge/browser-qa");
 const expectedDefaultShareUrl = "https://x.com/anthonydibe";
+const defaultCdpCandidates = [
+  "http://127.0.0.1:9222",
+  "http://localhost:9222",
+  "http://[::1]:9222",
+  "http://127.0.0.1:9223",
+  "http://localhost:9223",
+  "http://[::1]:9223"
+];
 
 class CdpClient {
   constructor(url) {
@@ -73,6 +81,25 @@ async function fetchJson(url, options) {
     throw new Error(`${response.status} ${response.statusText}: ${await response.text()}`);
   }
   return response.json();
+}
+
+async function resolveCdpBase() {
+  const candidates = Array.from(new Set([cdpBase, ...defaultCdpCandidates].filter(Boolean)));
+  const failures = [];
+
+  for (const candidate of candidates) {
+    try {
+      await fetchJson(`${candidate}/json/version`);
+      cdpBase = candidate;
+      return candidate;
+    } catch (error) {
+      failures.push(`${candidate}: ${error.message}`);
+    }
+  }
+
+  throw new Error(
+    `Chrome CDP is not reachable. Start Chrome with: open -na "Google Chrome" --args --remote-debugging-port=9222 --user-data-dir=/tmp/codex-work-badge-chrome ${targetUrl}\n${failures.join("\n")}`
+  );
 }
 
 async function waitFor(client, expression, label, timeout = 10000) {
@@ -161,11 +188,7 @@ async function installSavePickerProbe(client) {
 
 async function main() {
   await mkdir(artifactDir, { recursive: true });
-  await fetchJson(`${cdpBase}/json/version`).catch((error) => {
-    throw new Error(
-      `Chrome CDP is not reachable at ${cdpBase}. Start Chrome with: open -na "Google Chrome" --args --remote-debugging-port=9222 --user-data-dir=/tmp/codex-work-badge-chrome ${targetUrl}\n${error.message}`
-    );
-  });
+  await resolveCdpBase();
 
   const { client, target } = await createPage();
   const failures = [];
@@ -184,6 +207,19 @@ async function main() {
       input: document.querySelector('[data-testid="share-url-input"]')?.value || '',
       qr: document.querySelector('[data-profile-url]')?.getAttribute('data-profile-url') || ''
     }))()`);
+    const initialZero = await client.evaluate(`(() => ({
+      noScanMessage: document.body.innerText.includes('No scan yet'),
+      progress: document.querySelector('[data-testid="scan-progress"]')?.innerText || '',
+      threadsZero: document.body.innerText.includes('Threads 0'),
+      sessionsZero: document.body.innerText.includes('Sessions\\n0') || document.body.innerText.includes('Sessions 0')
+    }))()`);
+    const initialScreenshot = await client.send("Page.captureScreenshot", {
+      format: "png",
+      fromSurface: true,
+      captureBeyondViewport: true
+    });
+    const initialScreenshotPath = path.join(artifactDir, "browser-initial-zero-desktop.png");
+    await writeFile(initialScreenshotPath, Buffer.from(initialScreenshot.data, "base64"));
 
     await client.evaluate(`(() => {
       const input = document.querySelector('[data-testid="codex-root-input"]');
@@ -195,11 +231,11 @@ async function main() {
 
     await clickSelector(client, "[data-testid='scan-all-time']");
     await waitFor(client, "document.querySelector('[data-testid=\"scan-progress\"]')?.innerText === '100%'", "scan completion");
-    await waitFor(client, "document.body.innerText.includes('Browser preview scan complete with fixture data')", "scan success message");
+    await waitFor(client, "document.body.innerText.includes('Browser preview scan complete with demo fixture data')", "scan success message");
     const scanResult = await client.evaluate(`(() => ({
       moduleState: document.querySelector('[data-testid="scan-module"]')?.getAttribute('data-state') || '',
       progress: document.querySelector('[data-testid="scan-progress"]')?.innerText || '',
-      message: document.body.innerText.includes('Browser preview scan complete with fixture data')
+      message: document.body.innerText.includes('Browser preview scan complete with demo fixture data')
     }))()`);
     await waitFor(client, "document.querySelector('[data-testid=\"export-cache\"]')?.classList.contains('ready')", "PNG export cache after scan", 16000);
 
@@ -275,6 +311,15 @@ async function main() {
     const layout = await client.evaluate(`(() => {
       const overflow = document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
         || document.body.scrollWidth > document.documentElement.clientWidth + 2;
+      const badgeSvg = document.querySelector('svg')?.outerHTML || '';
+      const readNumber = (pattern) => {
+        const match = badgeSvg.match(pattern);
+        return match ? Number(match[1]) : null;
+      };
+      const securityY = readNumber(/id="security-glyph" transform="translate\\(622 (\\d+)\\)"/);
+      const activityY = readNumber(/id="activity-rail" transform="translate\\(112 (\\d+)\\)"/);
+      const allTimeY = readNumber(/<text x="112" y="(\\d+)"[^>]*font-size="42"[^>]*>All-time Codex run<\\/text>/);
+      const hasSignalStack = !!document.querySelector('#signal-stack') || badgeSvg.includes('SIGNAL STACK');
       return {
         overflow,
         cacheText: document.querySelector('[data-testid="export-cache"]')?.innerText || '',
@@ -286,7 +331,20 @@ async function main() {
         hasCustomQr: !!document.querySelector('[data-profile-url="https://x.com/testprofile"]'),
         hasHolographicEdge: !!document.querySelector('#holographic-edge'),
         hasActivityRail: !!document.querySelector('#activity-rail'),
-        hasActivityLattice: !!document.querySelector('#activity-lattice')
+        hasActivityLattice: !!document.querySelector('#activity-lattice'),
+        hasSignalStack,
+        securityY,
+        activityY,
+        allTimeY,
+        securityBandClear: typeof securityY === 'number' && securityY >= 340 && securityY + 194 < 620,
+        allTimeBeforeActivity: typeof allTimeY === 'number' && typeof activityY === 'number' && allTimeY < activityY,
+        activityGridWide: badgeSvg.includes('id="activity-lattice" transform="translate(24 144)"') && badgeSvg.includes('width="812" height="55"'),
+        hasTopActiveDay: badgeSvg.includes('Top active day'),
+        hasDeprecatedCornerAccents: badgeSvg.includes('M74 72H220'),
+        hasDeprecatedHeaderRules: badgeSvg.includes('M112 138H404M746 138H968'),
+        hasDeprecatedActivityAxis: badgeSvg.includes('>EARLY</text>') || badgeSvg.includes('>MID</text>') || badgeSvg.includes('>RECENT</text>'),
+        hasDeprecatedActivityModes: badgeSvg.includes('>WEEKLY</text>') || badgeSvg.includes('>CUMULATIVE</text>'),
+        hasExternalQrLabelPosition: badgeSvg.includes('y="177" text-anchor="middle"')
       };
     })()`);
 
@@ -313,6 +371,7 @@ async function main() {
       failures.push(`4K save picker did not receive a complete PNG: ${JSON.stringify(saved4096)}`);
     }
     if (initialShare.input !== expectedDefaultShareUrl || initialShare.qr !== expectedDefaultShareUrl) failures.push(`default profile URL is not rendered: ${JSON.stringify(initialShare)}`);
+    if (!initialZero.noScanMessage || initialZero.progress !== "0%" || !initialZero.threadsZero || !initialZero.sessionsZero) failures.push(`initial browser preview is not zeroed: ${JSON.stringify(initialZero)}`);
     if (rootInput !== "/Users/<qa>/.codex") failures.push(`Codex root input did not retain edited value: ${rootInput}`);
     if (scanResult.moduleState !== "success" || scanResult.progress !== "100%" || !scanResult.message) failures.push(`scan all-time flow failed: ${JSON.stringify(scanResult)}`);
     if (/copied/i.test(imageCopy.status) && !imageCopy.copied) failures.push(`image copy claimed success but clipboard did not contain image/png: ${JSON.stringify(imageCopy)}`);
@@ -327,6 +386,14 @@ async function main() {
     if (!layout.hasCustomQr) failures.push("custom profile URL QR is not rendered");
     if (!layout.hasHolographicEdge) failures.push("holographic edge is not rendered");
     if (!layout.hasActivityRail || !layout.hasActivityLattice) failures.push(`activity rail is not rendered: ${JSON.stringify(layout)}`);
+    if (layout.hasSignalStack) failures.push("dense signal stack is still rendered inside the badge SVG");
+    if (!layout.securityBandClear) failures.push(`security glyph is not isolated in the metric band: ${JSON.stringify(layout)}`);
+    if (!layout.allTimeBeforeActivity || !layout.activityGridWide) failures.push(`activity section is not separated or wide enough: ${JSON.stringify(layout)}`);
+    if (layout.hasTopActiveDay) failures.push("ambiguous Top active day metric is still rendered");
+    if (layout.hasDeprecatedCornerAccents) failures.push("deprecated corner accent rules are still rendered");
+    if (layout.hasDeprecatedHeaderRules) failures.push("deprecated top decorative rules are still rendered");
+    if (layout.hasDeprecatedActivityAxis || layout.hasDeprecatedActivityModes) failures.push(`deprecated activity rail micro-labels are still rendered: ${JSON.stringify(layout)}`);
+    if (layout.hasExternalQrLabelPosition) failures.push("profile URL label is still positioned outside the QR block");
     if (runtimeErrors.length) failures.push(`runtime errors: ${runtimeErrors.join(" | ")}`);
 
     const summary = {
@@ -335,6 +402,7 @@ async function main() {
       targetUrl,
       cdpBase,
       initialShare,
+      initialZero,
       rootInput,
       scanResult,
       saved4096,
@@ -343,7 +411,8 @@ async function main() {
       fallbackSave,
       fallbackCopy,
       layout,
-      screenshot: screenshotPath
+      screenshot: screenshotPath,
+      initialScreenshot: initialScreenshotPath
     };
     await writeFile(path.join(artifactDir, "browser-action-summary.json"), JSON.stringify(summary, null, 2));
 
