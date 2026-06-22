@@ -56,6 +56,16 @@ it("combines only rollout files inside the selected root", () => {
   expect(aggregate.userMessages).toBe(1);
   expect(aggregate.assistantMessages).toBe(1);
   expect(aggregate.tokens).toBe(100);
+  expect(aggregate.activityDays).toEqual([
+    {
+      date: "2026-05-28",
+      sessions: 2,
+      messages: 2,
+      toolCalls: 0,
+      tokens: 100,
+      activeMinutesEstimate: 0
+    }
+  ]);
   expect(aggregate.confidence).toBe("partial");
 });
 

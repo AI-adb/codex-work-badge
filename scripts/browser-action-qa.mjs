@@ -284,7 +284,9 @@ async function main() {
         hasRevealButton: document.body.innerText.includes('Reveal in Finder'),
         hasCopyCaption: document.body.innerText.includes('Copy Caption'),
         hasCustomQr: !!document.querySelector('[data-profile-url="https://x.com/testprofile"]'),
-        hasHolographicEdge: !!document.querySelector('#holographic-edge')
+        hasHolographicEdge: !!document.querySelector('#holographic-edge'),
+        hasActivityRail: !!document.querySelector('#activity-rail'),
+        hasActivityLattice: !!document.querySelector('#activity-lattice')
       };
     })()`);
 
@@ -324,6 +326,7 @@ async function main() {
     if (layout.hasCopyCaption) failures.push("Copy Caption button is still visible");
     if (!layout.hasCustomQr) failures.push("custom profile URL QR is not rendered");
     if (!layout.hasHolographicEdge) failures.push("holographic edge is not rendered");
+    if (!layout.hasActivityRail || !layout.hasActivityLattice) failures.push(`activity rail is not rendered: ${JSON.stringify(layout)}`);
     if (runtimeErrors.length) failures.push(`runtime errors: ${runtimeErrors.join(" | ")}`);
 
     const summary = {

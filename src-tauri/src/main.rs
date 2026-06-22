@@ -1,6 +1,7 @@
 use rusqlite::Connection;
 use serde::Serialize;
 use serde_json::Value;
+use std::collections::BTreeMap;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -25,6 +26,17 @@ struct SourceCounts {
     malformed_lines: usize,
 }
 
+#[derive(Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ActivityDay {
+    date: String,
+    sessions: u64,
+    messages: u64,
+    tool_calls: u64,
+    tokens: u64,
+    active_minutes_estimate: u64,
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct CodexAggregate {
@@ -36,6 +48,7 @@ struct CodexAggregate {
     tool_calls: u64,
     tokens: u64,
     active_minutes_estimate: u64,
+    activity_days: Vec<ActivityDay>,
     confidence: String,
     source_counts: SourceCounts,
 }
@@ -70,6 +83,29 @@ fn iso_date_from_ms(ms: Option<i64>) -> Option<String> {
     let month = mp + if mp < 10 { 3 } else { -9 };
     let year = y + if month <= 2 { 1 } else { 0 };
     Some(format!("{:04}-{:02}-{:02}", year, month, day))
+}
+
+fn add_activity_day(
+    days: &mut BTreeMap<String, ActivityDay>,
+    date: Option<String>,
+    sessions: u64,
+    messages: u64,
+    tool_calls: u64,
+    tokens: u64,
+    active_minutes_estimate: u64,
+) {
+    let Some(date) = date else {
+        return;
+    };
+    let entry = days.entry(date.clone()).or_insert_with(|| ActivityDay {
+        date,
+        ..ActivityDay::default()
+    });
+    entry.sessions += sessions;
+    entry.messages += messages;
+    entry.tool_calls += tool_calls;
+    entry.tokens += tokens;
+    entry.active_minutes_estimate += active_minutes_estimate;
 }
 
 fn path_inside_root(candidate: &Path, root: &Path) -> bool {
@@ -155,9 +191,12 @@ fn scan_codex_root(root: String) -> Result<CodexAggregate, String> {
     let mut missing_rollouts = 0;
     let mut skipped_out_of_scope = 0;
     let mut malformed_lines = 0;
+    let mut activity_by_date = BTreeMap::<String, ActivityDay>::new();
 
     for thread in &threads {
         tokens += thread.tokens_used;
+        let activity_date = iso_date_from_ms(thread.updated_at_ms.or(thread.created_at_ms));
+        add_activity_day(&mut activity_by_date, activity_date.clone(), 1, 0, 0, thread.tokens_used, 0);
         let rollout_path = PathBuf::from(&thread.rollout_path);
         if !path_inside_root(&rollout_path, &canonical_root) {
             skipped_out_of_scope += 1;
@@ -174,6 +213,15 @@ fn scan_codex_root(root: String) -> Result<CodexAggregate, String> {
         tool_calls += rollout.tool_calls;
         active_ms += rollout.active_ms;
         malformed_lines += rollout.malformed_lines;
+        add_activity_day(
+            &mut activity_by_date,
+            activity_date,
+            0,
+            rollout.user_messages + rollout.assistant_messages,
+            rollout.tool_calls,
+            0,
+            rollout.active_ms / 60_000,
+        );
     }
 
     let from = threads.iter().filter_map(|thread| thread.created_at_ms).min();
@@ -204,6 +252,7 @@ fn scan_codex_root(root: String) -> Result<CodexAggregate, String> {
         tool_calls,
         tokens,
         active_minutes_estimate: active_ms / 60_000,
+        activity_days: activity_by_date.into_values().collect(),
         confidence: confidence.to_string(),
         source_counts: SourceCounts {
             threads: threads.len(),

@@ -10,6 +10,14 @@ it("creates a public-safe manifest with at most three chips", () => {
   expect(manifest.heroMetric.label).toBe("Verified Codex hours");
   expect(manifest.heroMetric.value).toBe("257");
   expect(manifest.shareUrl).toBe("https://x.com/anthonydibe");
+  expect(manifest.activityProof.stats).toEqual([
+    { label: "Lifetime tokens", value: "18.4m" },
+    { label: "Peak day", value: "4.2m" },
+    { label: "Top active day", value: "38h" },
+    { label: "Latest streak", value: "4d" },
+    { label: "Longest streak", value: "4d" }
+  ]);
+  expect(manifest.activityProof.intensity).toHaveLength(250);
   expect(manifest.confidenceStrip).toContain("Codex Merit Card");
   expect(() => assertPublicManifestSafe(manifest)).not.toThrow();
 });
@@ -38,7 +46,14 @@ it("renders a deterministic square svg with no local paths", () => {
   expect(svg).toContain("holoRainbow");
   expect(svg).toContain("holoLattice");
   expect(svg).toContain("PROFILE URL");
-  expect(svg).toContain('id="metric-dock"');
+  expect(svg).toContain('id="activity-rail"');
+  expect(svg).toContain('id="activity-stat-ribbon"');
+  expect(svg).toContain('id="activity-lattice"');
+  expect(svg).toContain("Codex activity");
+  expect(svg).toContain("PUBLIC-SAFE DAILY SIGNAL");
+  expect(svg).toContain("Lifetime tokens");
+  expect(svg).toContain("18.4m");
+  expect(svg).not.toContain('id="metric-dock"');
   expect(svg).not.toContain('id="rank-plaque"');
   expect(svg).not.toContain("rankPlate");
   expect(svg).not.toContain("rankEdge");
@@ -52,7 +67,6 @@ it("renders a deterministic square svg with no local paths", () => {
   expect(svg).not.toContain("PRIVACY CHECK");
   expect(svg).not.toContain("SHARE SAFE");
   expect(svg).not.toContain("NO PROMPTS");
-  expect(svg).not.toContain("PUBLIC-SAFE");
   expect(svg).not.toContain("/Users/");
   expect(svg).not.toContain("undefined");
 });

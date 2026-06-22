@@ -1,8 +1,12 @@
 import { assertPublicManifestSafe } from "./privacy.ts";
 import { renderQrUrlSvg } from "./qr.ts";
-import type { BadgeManifest, CodexAggregate, OutcomeLedgerEntry } from "./types.ts";
+import type { ActivityProof, BadgeManifest, CodexAggregate, OutcomeLedgerEntry } from "./types.ts";
 
 export const DEFAULT_SHARE_URL = "https://x.com/anthonydibe";
+const DAY_MS = 86_400_000;
+const ACTIVITY_COLUMNS = 50;
+const ACTIVITY_ROWS = 5;
+const ACTIVITY_CELL_COUNT = ACTIVITY_COLUMNS * ACTIVITY_ROWS;
 
 function formatNumber(value: number): string {
   return new Intl.NumberFormat("en", { notation: value >= 100000 ? "compact" : "standard" }).format(value);
@@ -11,6 +15,110 @@ function formatNumber(value: number): string {
 function formatHours(minutes: number): string {
   const hours = Math.max(0, minutes / 60);
   return hours >= 10 ? Math.round(hours).toString() : hours.toFixed(1);
+}
+
+function formatCompactMetric(value: number): string {
+  if (value <= 0) return "0";
+  return new Intl.NumberFormat("en", {
+    notation: value >= 10000 ? "compact" : "standard",
+    maximumFractionDigits: value >= 10000 ? 1 : 0
+  })
+    .format(value)
+    .replace("K", "k")
+    .replace("M", "m")
+    .replace("B", "bn");
+}
+
+function formatDuration(minutes: number): string {
+  if (minutes <= 0) return "0m";
+  if (minutes < 60) return `${Math.round(minutes)}m`;
+  return `${formatHours(minutes)}h`;
+}
+
+function parseIsoDate(value: string | null): number | null {
+  if (!value) return null;
+  const time = Date.parse(`${value}T00:00:00.000Z`);
+  return Number.isFinite(time) ? time : null;
+}
+
+function dayIndex(time: number): number {
+  return Math.floor(time / DAY_MS);
+}
+
+function activityStreaks(aggregate: CodexAggregate): { latest: number; longest: number } {
+  const days = new Set(
+    (aggregate.activityDays || [])
+      .filter((day) => day.sessions || day.messages || day.toolCalls || day.tokens || day.activeMinutesEstimate)
+      .map((day) => parseIsoDate(day.date))
+      .filter((time): time is number => typeof time === "number")
+      .map(dayIndex)
+  );
+  const ordered = Array.from(days).sort((a, b) => a - b);
+  let longest = 0;
+  let current = 0;
+  let previous: number | null = null;
+  for (const day of ordered) {
+    current = previous === null || day === previous + 1 ? current + 1 : 1;
+    longest = Math.max(longest, current);
+    previous = day;
+  }
+
+  let latest = 0;
+  if (ordered.length) {
+    let cursor = ordered[ordered.length - 1];
+    while (days.has(cursor)) {
+      latest += 1;
+      cursor -= 1;
+    }
+  }
+
+  return { latest, longest };
+}
+
+function buildActivityIntensity(aggregate: CodexAggregate): number[] {
+  const values = new Array<number>(ACTIVITY_CELL_COUNT).fill(0);
+  const activityDays = aggregate.activityDays || [];
+  const firstActivity = activityDays.map((day) => parseIsoDate(day.date)).filter((time): time is number => typeof time === "number").sort((a, b) => a - b)[0] ?? null;
+  const lastActivity = activityDays.map((day) => parseIsoDate(day.date)).filter((time): time is number => typeof time === "number").sort((a, b) => b - a)[0] ?? null;
+  const from = parseIsoDate(aggregate.dateRange.from) ?? firstActivity;
+  const to = parseIsoDate(aggregate.dateRange.to) ?? lastActivity;
+  if (from === null || to === null || to < from) return values;
+
+  const spanDays = Math.max(1, dayIndex(to) - dayIndex(from) + 1);
+  for (const day of activityDays) {
+    const time = parseIsoDate(day.date);
+    if (time === null || time < from || time > to) continue;
+    const offset = Math.max(0, dayIndex(time) - dayIndex(from));
+    const bucket = Math.min(ACTIVITY_CELL_COUNT - 1, Math.floor((offset / spanDays) * ACTIVITY_CELL_COUNT));
+    values[bucket] +=
+      Math.max(0, day.tokens) +
+      Math.max(0, day.toolCalls) * 1200 +
+      Math.max(0, day.messages) * 140 +
+      Math.max(0, day.sessions) * 3000 +
+      Math.max(0, day.activeMinutesEstimate) * 180;
+  }
+
+  const peak = Math.max(...values);
+  if (peak <= 0) return values;
+  return values.map((value) => (value <= 0 ? 0 : Math.max(1, Math.min(4, Math.ceil(Math.sqrt(value / peak) * 4)))));
+}
+
+function createActivityProof(aggregate: CodexAggregate): ActivityProof {
+  const activityDays = aggregate.activityDays || [];
+  const peakTokens = activityDays.reduce((peak, day) => Math.max(peak, day.tokens), 0);
+  const topActiveMinutes = activityDays.reduce((peak, day) => Math.max(peak, day.activeMinutesEstimate), 0);
+  const streaks = activityStreaks(aggregate);
+
+  return {
+    stats: [
+      { label: "Lifetime tokens", value: formatCompactMetric(aggregate.tokens) },
+      { label: "Peak day", value: formatCompactMetric(peakTokens) },
+      { label: "Top active day", value: formatDuration(topActiveMinutes) },
+      { label: "Latest streak", value: `${streaks.latest}d` },
+      { label: "Longest streak", value: `${streaks.longest}d` }
+    ],
+    intensity: buildActivityIntensity(aggregate)
+  };
 }
 
 function chooseTier(aggregate: CodexAggregate): BadgeManifest["tier"] {
@@ -79,6 +187,7 @@ export function createBadgeManifest(
     profileSubtitle: profile.subtitle,
     heroMetric,
     chips,
+    activityProof: createActivityProof(aggregate),
     tier: chooseTier(aggregate),
     confidenceStrip,
     privacyMode,
@@ -155,23 +264,36 @@ function renderHoloPixels(digest: string): string {
   }).join("");
 }
 
+function renderActivityCells(intensity: number[]): string {
+  const fills = ["#e7eceb", "#d9e7e7", "#bfd6da", "#8fb8cf", "#61bff1"];
+  const strokes = ["#d4dcdb", "#c6d8d7", "#a7c2c7", "#6f9db5", "#2f6f8f"];
+  return intensity.map((level, index) => {
+    const safeLevel = Math.max(0, Math.min(4, Math.round(level || 0)));
+    const column = Math.floor(index / ACTIVITY_ROWS);
+    const row = index % ACTIVITY_ROWS;
+    const x = column * 11;
+    const y = row * 11;
+    const opacity = safeLevel === 0 ? "0.58" : (0.72 + safeLevel * 0.07).toFixed(2);
+    return `<rect x="${x}" y="${y}" width="7" height="7" rx="2" fill="${fills[safeLevel]}" stroke="${strokes[safeLevel]}" stroke-width="0.55" opacity="${opacity}"/>`;
+  }).join("");
+}
+
 export function renderBadgeSvg(manifest: BadgeManifest, size = 1080): string {
   const metricUnit = manifest.heroMetric.label.toLowerCase().includes("session") ? "sessions" : "hours";
-  const cellCount = Math.max(1, manifest.chips.length);
-  const cellWidth = 856 / cellCount;
   const digest = publicDigest(manifest);
   const digestLabel = `${digest.slice(0, 4)}-${digest.slice(4)}`;
   const holoRings = renderHoloRings(digest);
   const holoPixels = renderHoloPixels(digest);
+  const activityCells = renderActivityCells(manifest.activityProof.intensity);
   const profileQr = renderQrUrlSvg(manifest.shareUrl, 3, 4);
-  const chips = manifest.chips.map((chip, index) => {
-    const x = index * cellWidth;
+  const activityStatWidth = 856 / Math.max(1, manifest.activityProof.stats.length);
+  const activityStats = manifest.activityProof.stats.map((stat, index) => {
+    const x = index * activityStatWidth;
     return `
       <g transform="translate(${x} 0)">
-        ${index > 0 ? `<path d="M0 18V104" stroke="#ccd6d8" stroke-width="2"/>` : ""}
-        <path d="M28 28H${Math.max(128, cellWidth - 42)}" stroke="#255f62" stroke-width="2" opacity="0.5"/>
-        <text x="28" y="60" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="17" fill="#5f696d">${escapeXml(chip.label)}</text>
-        <text x="28" y="96" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="33" font-weight="850" fill="#171716">${escapeXml(chip.value)}</text>
+        ${index > 0 ? `<path d="M0 18V58" stroke="#d8e0df" stroke-width="1.5"/>` : ""}
+        <text x="${activityStatWidth / 2}" y="28" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="27" font-weight="760" fill="#171716">${escapeXml(stat.value)}</text>
+        <text x="${activityStatWidth / 2}" y="55" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="16" font-weight="520" fill="#6a7477">${escapeXml(stat.label)}</text>
       </g>`;
   }).join("");
   const signalRows = manifest.chips.map((chip, index) => {
@@ -310,9 +432,26 @@ export function renderBadgeSvg(manifest: BadgeManifest, size = 1080): string {
     </g>
     <path d="M20 0V194M326 0V194" stroke="#ffffff" stroke-width="1" opacity="0.45"/>
   </g>
-  <g id="metric-dock" transform="translate(112 792)">
-    <rect width="856" height="124" rx="18" fill="#ffffff" stroke="#ccd6d8" stroke-width="2"/>
-    ${chips}
+  <g id="activity-rail" transform="translate(112 770)">
+    <rect width="856" height="154" rx="18" fill="#ffffff" stroke="#ccd6d8" stroke-width="2"/>
+    <rect x="1" y="1" width="854" height="152" rx="17" fill="url(#paper)" opacity="0.34"/>
+    <g id="activity-stat-ribbon" transform="translate(0 18)">
+      ${activityStats}
+    </g>
+    <path d="M24 78H832" stroke="#ccd6d8" stroke-width="1.5"/>
+    <text x="24" y="106" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="22" font-weight="720" fill="#171716">Codex activity</text>
+    <text x="24" y="130" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14" fill="#5f696d">PUBLIC-SAFE DAILY SIGNAL</text>
+    <text x="266" y="106" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14" fill="#315f5c">DAILY</text>
+    <text x="324" y="106" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14" fill="#8a9496">WEEKLY</text>
+    <text x="398" y="106" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14" fill="#8a9496">CUMULATIVE</text>
+    <g id="activity-lattice" transform="translate(282 88)">
+      <rect x="-12" y="-12" width="574" height="75" rx="12" fill="#f7faf9" stroke="#e1e7e6" stroke-width="1"/>
+      ${activityCells}
+      <path d="M-12 61H562" stroke="url(#holoEdge)" stroke-width="2" opacity="0.34"/>
+      <text x="0" y="66" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10" fill="#6a7477">EARLY</text>
+      <text x="270" y="66" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10" fill="#6a7477">MID</text>
+      <text x="546" y="66" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10" fill="#315f5c">RECENT</text>
+    </g>
   </g>
   <text x="112" y="968" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="17" fill="#5f696d">${escapeXml(manifest.confidenceStrip)}</text>
   <text x="968" y="968" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="17" fill="#315f5c">MERIT SERIES</text>

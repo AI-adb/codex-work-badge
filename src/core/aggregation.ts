@@ -1,10 +1,34 @@
-import type { CodexAggregate, RolloutAggregate, ThreadRow } from "./types.ts";
+import type { ActivityDay, CodexAggregate, RolloutAggregate, ThreadRow } from "./types.ts";
 
 const IDLE_CAP_MS = 10 * 60 * 1000;
 
 function toIsoDate(value: number | null): string | null {
   if (!value || Number.isNaN(value)) return null;
   return new Date(value).toISOString().slice(0, 10);
+}
+
+function addActivityDay(
+  days: Map<string, ActivityDay>,
+  date: string | null,
+  update: Partial<Omit<ActivityDay, "date">>
+) {
+  if (!date) return;
+  const current =
+    days.get(date) ||
+    {
+      date,
+      sessions: 0,
+      messages: 0,
+      toolCalls: 0,
+      tokens: 0,
+      activeMinutesEstimate: 0
+    };
+  current.sessions += Math.max(0, update.sessions || 0);
+  current.messages += Math.max(0, update.messages || 0);
+  current.toolCalls += Math.max(0, update.toolCalls || 0);
+  current.tokens += Math.max(0, update.tokens || 0);
+  current.activeMinutesEstimate += Math.max(0, update.activeMinutesEstimate || 0);
+  days.set(date, current);
 }
 
 export function parseRolloutJsonl(text: string): RolloutAggregate {
@@ -72,6 +96,7 @@ export function combineAggregateFromThreads(
   let skippedOutOfScope = 0;
   let malformedLines = 0;
   let tokens = 0;
+  const activityByDate = new Map<string, ActivityDay>();
 
   const createdValues = threads
     .map((thread) => thread.createdAtMs)
@@ -82,6 +107,8 @@ export function combineAggregateFromThreads(
 
   for (const thread of threads) {
     tokens += Math.max(0, thread.tokensUsed || 0);
+    const activityDate = toIsoDate(thread.updatedAtMs || thread.createdAtMs);
+    addActivityDay(activityByDate, activityDate, { sessions: 1, tokens: Math.max(0, thread.tokensUsed || 0) });
 
     if (!isAllowedRolloutPath(thread.rolloutPath)) {
       skippedOutOfScope += 1;
@@ -101,6 +128,11 @@ export function combineAggregateFromThreads(
     toolCalls += rollout.toolCalls;
     activeMs += rollout.activeMs;
     malformedLines += rollout.malformedLines;
+    addActivityDay(activityByDate, activityDate, {
+      messages: rollout.userMessages + rollout.assistantMessages,
+      toolCalls: rollout.toolCalls,
+      activeMinutesEstimate: Math.round(rollout.activeMs / 60000)
+    });
   }
 
   const from = createdValues.length ? Math.min(...createdValues) : null;
@@ -124,6 +156,7 @@ export function combineAggregateFromThreads(
     toolCalls,
     tokens,
     activeMinutesEstimate: Math.round(activeMs / 60000),
+    activityDays: Array.from(activityByDate.values()).sort((a, b) => a.date.localeCompare(b.date)),
     confidence,
     sourceCounts: {
       threads: threads.length,

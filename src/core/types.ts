@@ -13,6 +13,7 @@ export type CodexAggregate = {
   toolCalls: number;
   tokens: number;
   activeMinutesEstimate: number;
+  activityDays: ActivityDay[];
   confidence: ConfidenceLevel;
   sourceCounts: {
     threads: number;
@@ -21,6 +22,15 @@ export type CodexAggregate = {
     skippedOutOfScope: number;
     malformedLines: number;
   };
+};
+
+export type ActivityDay = {
+  date: string;
+  sessions: number;
+  messages: number;
+  toolCalls: number;
+  tokens: number;
+  activeMinutesEstimate: number;
 };
 
 export type OutcomeLedgerEntry = {
@@ -38,6 +48,11 @@ export type BadgeChip = {
   value: string;
 };
 
+export type ActivityProof = {
+  stats: BadgeChip[];
+  intensity: number[];
+};
+
 export type BadgeManifest = {
   title: string;
   period: string;
@@ -48,6 +63,7 @@ export type BadgeManifest = {
     value: string;
   };
   chips: BadgeChip[];
+  activityProof: ActivityProof;
   tier: "Seed" | "Builder" | "Shipper" | "Operator";
   confidenceStrip: string;
   privacyMode: PrivacyMode;
